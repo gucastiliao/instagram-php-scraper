@@ -999,11 +999,12 @@ class Instagram
      * @param int $count Total followers to retrieve
      * @param int $pageSize Internal page size for pagination
      * @param bool $delayed Use random delay between requests to mimic browser behaviour
+     * @param string $endCursor
      *
-     * @return array
      * @throws InstagramException
+     * @return mixed
      */
-    public function getFollowers($accountId, $count = 20, $pageSize = 20, $delayed = true)
+    public function getFollowers($accountId, $count = 20, $pageSize = 20, $delayed = true, $endCursor = null)
     {
         if ($delayed) {
             set_time_limit($this->pagingTimeLimitSec);
@@ -1011,7 +1012,7 @@ class Instagram
 
         $index = 0;
         $accounts = [];
-        $endCursor = '';
+        $endCursor = (!is_null($endCursor)) ? $endCursor : '';
 
         if ($count < $pageSize) {
             throw new InstagramException('Count must be greater than or equal to page size.');
@@ -1035,19 +1036,17 @@ class Instagram
                 throw new InstagramException('Failed to get followers of account id ' . $accountId . '. The account is private.');
             }
 
-            foreach ($edgesArray as $edge) {
-                $accounts[] = $edge['node'];
-                $index++;
-                if ($index >= $count) {
-                    break 2;
-                }
-            }
-
             $pageInfo = $jsonResponse['data']['user']['edge_followed_by']['page_info'];
             if ($pageInfo['has_next_page']) {
                 $endCursor = $pageInfo['end_cursor'];
-            } else {
-                break;
+            }
+
+            foreach ($edgesArray as $edge) {
+                yield $edge['node'];
+                $index++;
+                if ($index >= $count) {
+                    yield $endCursor;
+                }
             }
 
             if ($delayed) {
@@ -1056,7 +1055,8 @@ class Instagram
                 usleep($microsec);
             }
         }
-        return $accounts;
+
+        return $endCursor;
     }
 
     /**
